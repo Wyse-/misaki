@@ -1,0 +1,69 @@
+#!/usr/bin/python3
+
+import sys
+import re
+import os
+from pathlib import Path
+
+MISAKI_VERSION = "0.1"
+MISAKI_URL = "https://github.com/Wyse-/misaki"
+PATH_REGEX = "'(.*?)'"
+MKVMERGE_TITLE_COMMAND = "--title "
+MKVMERGE_TITLE_EMPTY_COMMAND = "--title ''"
+
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+def natural_keys(text):
+    return [atoi(c) for c in re.split('(\d+)', text)]
+
+class Muxable:
+	def __init__(self, path, extension):
+		self.path = path
+		self.extension = extension
+
+print(f"Version: misaki {MISAKI_VERSION} {MISAKI_URL}")
+print(f"Runtime: Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]}")
+if len(sys.argv) < 2:
+	print("Usage: misaki \"mkvmergecommandline\"")
+	exit()
+
+matches = re.findall(PATH_REGEX, sys.argv[1])
+formattableArg = sys.argv[1]
+formattableArg = formattableArg.replace(MKVMERGE_TITLE_COMMAND, MKVMERGE_TITLE_EMPTY_COMMAND)
+pathCounter = 0
+muxables = []
+outputPath = ''
+for fullPath in matches:
+	if os.path.isabs(fullPath):
+		formattableArg = formattableArg.replace(fullPath, '{' + str(pathCounter) + '}')
+		if pathCounter > 0:
+			muxables.append(Muxable(str(Path(fullPath).parent), str(Path(fullPath).suffix)))
+		else:
+			outputPath = str(Path(fullPath).parent)
+		pathCounter += 1
+
+muxableFiles = []
+for index, muxable in enumerate(muxables):
+	muxableFiles.append([])
+	filesInPath = os.listdir(muxable.path)
+	filesInPath.sort(key=natural_keys)
+
+	for file in filesInPath:
+		if file.endswith(muxable.extension):
+			muxableFiles[index].append(muxable.path + '/' + file)
+
+print("\nFiles, Extension, Path\n")
+for index, muxableFileList in enumerate(muxableFiles):
+	print(str(len(muxableFileList)) + "\t\t" + muxables[index].extension + "\t\t" + muxables[index].path)
+
+muxCommands = []
+for index, file in enumerate(muxableFiles[0]):
+	muxCommands.append(formattableArg.format(outputPath + "/{}.mkv".format(str(index + 1)), *[i[index] for i in muxableFiles]))
+
+bashFile = open("misaki.sh", "w")
+for muxCommand in muxCommands:
+	bashFile.writelines(muxCommand + "\n")
+
+bashFile.close()
+print("\nDone!")
